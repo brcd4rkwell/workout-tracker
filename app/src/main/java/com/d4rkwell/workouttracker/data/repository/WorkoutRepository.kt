@@ -4,6 +4,7 @@ import com.d4rkwell.workouttracker.data.local.dao.DayDao
 import com.d4rkwell.workouttracker.data.local.dao.ExerciseDao
 import com.d4rkwell.workouttracker.data.local.dao.LoggedSetDao
 import com.d4rkwell.workouttracker.data.local.dao.WeekDao
+import com.d4rkwell.workouttracker.data.local.dao.WeightEntryDao
 import com.d4rkwell.workouttracker.data.local.dao.WorkoutSessionDao
 import com.d4rkwell.workouttracker.data.local.entity.DayEntity
 import com.d4rkwell.workouttracker.data.local.entity.DayWithExercises
@@ -12,8 +13,10 @@ import com.d4rkwell.workouttracker.data.local.entity.LoggedSetEntity
 import com.d4rkwell.workouttracker.data.local.entity.SessionWithLoggedSets
 import com.d4rkwell.workouttracker.data.local.entity.WeekEntity
 import com.d4rkwell.workouttracker.data.local.entity.WeekWithDays
+import com.d4rkwell.workouttracker.data.local.entity.WeightEntryEntity
 import com.d4rkwell.workouttracker.data.local.entity.WorkoutSessionEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
@@ -26,7 +29,8 @@ class WorkoutRepository(
     private val dayDao: DayDao,
     private val exerciseDao: ExerciseDao,
     private val sessionDao: WorkoutSessionDao,
-    private val loggedSetDao: LoggedSetDao
+    private val loggedSetDao: LoggedSetDao,
+    private val weightEntryDao: WeightEntryDao
 ) {
     // ---------- Weeks ----------
 
@@ -51,6 +55,49 @@ class WorkoutRepository(
     suspend fun updateWeek(week: WeekEntity) = weekDao.update(week)
 
     suspend fun deleteWeek(week: WeekEntity) = weekDao.delete(week)
+
+    /**
+     * Deep-copies a week — its days, and each day's exercises — into a new
+     * week appended at the end of the list. Lets the user build "Week 1"
+     * once and reuse it for weeks that repeat the same routine. The copy
+     * gets its own title (e.g. "Week 1 (copy)"); the original is untouched.
+     * Returns the new week's id.
+     */
+    suspend fun duplicateWeek(weekId: Long): Long? {
+        val source = weekDao.getWeek(weekId) ?: return null
+        val sourceDays = dayDao.observeDaysForWeek(weekId).first()
+
+        val newWeekId = weekDao.insert(
+            WeekEntity(
+                orderIndex = weekDao.getMaxOrderIndex() + 1,
+                title = "${source.title} (copy)",
+                note = source.note
+            )
+        )
+
+        for (day in sourceDays.sortedBy { it.orderIndex }) {
+            val newDayId = dayDao.insert(
+                DayEntity(
+                    weekId = newWeekId,
+                    orderIndex = day.orderIndex,
+                    title = day.title,
+                    warmupMinutes = day.warmupMinutes,
+                    note = day.note
+                )
+            )
+            val sourceExercises = exerciseDao.observeExercisesForDay(day.dayId).first()
+            for (exercise in sourceExercises.sortedBy { it.orderIndex }) {
+                exerciseDao.insert(
+                    exercise.copy(
+                        exerciseId = 0,
+                        dayId = newDayId
+                    )
+                )
+            }
+        }
+
+        return newWeekId
+    }
 
     // ---------- Days ----------
 
@@ -81,12 +128,13 @@ class WorkoutRepository(
     suspend fun addExercise(
         dayId: Long,
         name: String,
-        targetSets: Int,
+        warmupSets: Int,
+        workingSets: Int,
         targetRepsLow: Int,
         targetRepsHigh: Int,
         restSeconds: Int,
         note: String = "",
-        muscleGroup: String = ""
+        videoUrl: String = ""
     ): Long {
         val nextIndex = exerciseDao.getMaxOrderIndex(dayId) + 1
         return exerciseDao.insert(
@@ -94,12 +142,13 @@ class WorkoutRepository(
                 dayId = dayId,
                 orderIndex = nextIndex,
                 name = name,
-                targetSets = targetSets,
+                warmupSets = warmupSets,
+                workingSets = workingSets,
                 targetRepsLow = targetRepsLow,
                 targetRepsHigh = targetRepsHigh,
                 restSeconds = restSeconds,
                 note = note,
-                muscleGroup = muscleGroup
+                videoUrl = videoUrl
             )
         )
     }
@@ -164,6 +213,7 @@ class WorkoutRepository(
     suspend fun logSet(
         sessionId: Long,
         exerciseId: Long,
+        isWarmup: Boolean,
         setNumber: Int,
         weight: Double,
         reps: Int,
@@ -175,6 +225,7 @@ class WorkoutRepository(
                 sessionId = sessionId,
                 exerciseId = exerciseId,
                 exerciseName = exerciseName,
+                isWarmup = isWarmup,
                 setNumber = setNumber,
                 weight = weight,
                 reps = reps,
@@ -187,4 +238,17 @@ class WorkoutRepository(
     suspend fun updateLoggedSet(loggedSet: LoggedSetEntity) = loggedSetDao.update(loggedSet)
 
     suspend fun deleteLoggedSet(loggedSet: LoggedSetEntity) = loggedSetDao.delete(loggedSet)
+
+    // ---------- Bodyweight tracking ----------
+
+    fun observeAllWeightEntries(): Flow<List<WeightEntryEntity>> = weightEntryDao.observeAllEntries()
+
+    fun observeLatestWeightEntry(): Flow<WeightEntryEntity?> = weightEntryDao.observeLatestEntry()
+
+    suspend fun logWeightEntry(weight: Double, note: String = "", loggedAtEpochMillis: Long = System.currentTimeMillis()): Long =
+        weightEntryDao.insert(WeightEntryEntity(weight = weight, note = note, loggedAtEpochMillis = loggedAtEpochMillis))
+
+    suspend fun updateWeightEntry(entry: WeightEntryEntity) = weightEntryDao.update(entry)
+
+    suspend fun deleteWeightEntry(entry: WeightEntryEntity) = weightEntryDao.delete(entry)
 }

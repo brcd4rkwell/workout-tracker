@@ -1,5 +1,7 @@
 package com.d4rkwell.workouttracker.ui.screens.workoutsession
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -7,6 +9,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
 
@@ -20,7 +23,8 @@ fun WorkoutSessionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val timerState by viewModel.timerState.collectAsState()
     val draft by viewModel.draft.collectAsState()
-    val loggedSets by viewModel.loggedSetsForCurrentExercise.collectAsState()
+    val loggedSets = uiState.loggedSetsForCurrentExercise
+    val context = LocalContext.current
 
     var showExitConfirm by remember { mutableStateOf(false) }
 
@@ -71,7 +75,9 @@ fun WorkoutSessionScreen(
                             exercise = exercise,
                             exerciseIndex = uiState.currentExerciseIndex,
                             totalExercises = uiState.exercises.size,
-                            loggedSets = loggedSets,
+                            loggedWarmupSets = loggedSets.filter { it.isWarmup },
+                            loggedWorkingSets = loggedSets.filter { !it.isWarmup },
+                            isInWarmupSubstage = uiState.isInWarmupSubstage,
                             previousBest = uiState.previousBestForCurrentExercise,
                             draftWeight = draft.weight,
                             draftReps = draft.reps,
@@ -86,6 +92,17 @@ fun WorkoutSessionScreen(
                             onAddTimerSeconds = viewModel::addTimerSeconds,
                             onPrevExercise = viewModel::goToPreviousExercise,
                             onNextExercise = viewModel::goToNextExercise,
+                            onWatchVideo = {
+                                if (exercise.videoUrl.isNotBlank()) {
+                                    try {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(exercise.videoUrl))
+                                        )
+                                    } catch (_: Exception) {
+                                        // Malformed/unopenable link — ignore rather than crash mid-workout.
+                                    }
+                                }
+                            },
                             canGoPrev = uiState.currentExerciseIndex > 0,
                             isLastExercise = uiState.isLastExercise
                         )

@@ -14,7 +14,8 @@ class WorkoutApplication : Application() {
             dayDao = database.dayDao(),
             exerciseDao = database.exerciseDao(),
             sessionDao = database.workoutSessionDao(),
-            loggedSetDao = database.loggedSetDao()
+            loggedSetDao = database.loggedSetDao(),
+            weightEntryDao = database.weightEntryDao()
         )
     }
 }

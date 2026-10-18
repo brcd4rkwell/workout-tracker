@@ -8,6 +8,7 @@ object Destinations {
     const val WORKOUT_SESSION = "workout_session/{dayId}"
     const val HISTORY = "history"
     const val HISTORY_DETAIL = "history_detail/{sessionId}"
+    const val WEIGHT_PROGRESS = "weight_progress"
 
     fun weekDetail(weekId: Long) = "week_detail/$weekId"
     fun dayEditor(dayId: Long) = "day_editor/$dayId"

@@ -7,8 +7,14 @@ import androidx.room.PrimaryKey
 
 /**
  * A prescribed exercise within a [DayEntity] — this is the "plan" row:
- * target sets/reps/rest, plus the user's own free-form note (their own
- * cues/ideas, shown right next to the exercise name).
+ * target warmup/working sets, rep range, rest, plus the user's own
+ * free-form note (their own cues/ideas, shown right next to the
+ * exercise name).
+ *
+ * Warmup sets and working sets are tracked as separate counts: warmup
+ * sets are light ramp-up sets done before the real working weight, and
+ * are logged (and shown during a live session) as their own distinct
+ * stage before the working sets.
  *
  * Actual performed sets (weight/reps logged on a given date) live in
  * [LoggedSetEntity] and reference this exercise, so history/analysis can
@@ -32,10 +38,11 @@ data class ExerciseEntity(
     val dayId: Long,
     val orderIndex: Int,
     val name: String,
-    val targetSets: Int,
+    val warmupSets: Int = 0,         // light ramp-up sets, logged before working sets
+    val workingSets: Int,            // the real/counted working sets
     val targetRepsLow: Int,          // rep range low end, e.g. 8
     val targetRepsHigh: Int,         // rep range high end, e.g. 12 (equal to low if single number)
     val restSeconds: Int,            // rest between sets, in seconds
     val note: String = "",           // user's own little note, shown near the exercise name
-    val muscleGroup: String = ""     // optional free-text tag, e.g. "Chest"
+    val videoUrl: String = ""        // optional YouTube link showing how to perform the exercise
 )

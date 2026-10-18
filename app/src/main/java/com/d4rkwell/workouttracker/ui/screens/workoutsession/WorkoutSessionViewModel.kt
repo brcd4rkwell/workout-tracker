@@ -43,11 +43,25 @@ data class WorkoutSessionUiState(
     val currentExercise: ExerciseEntity?
         get() = exercises.getOrNull(currentExerciseIndex)
 
-    val completedSetCountForCurrentExercise: Int
-        get() = loggedSetsForCurrentExercise.size
+    val loggedWarmupSets: List<LoggedSetEntity>
+        get() = loggedSetsForCurrentExercise.filter { it.isWarmup }
+
+    val loggedWorkingSets: List<LoggedSetEntity>
+        get() = loggedSetsForCurrentExercise.filter { !it.isWarmup }
+
+    /** Whether the user is still expected to log warmup sets for the current exercise. */
+    val isInWarmupSubstage: Boolean
+        get() {
+            val exercise = currentExercise ?: return false
+            return exercise.warmupSets > 0 && loggedWarmupSets.size < exercise.warmupSets
+        }
 
     val isCurrentExerciseComplete: Boolean
-        get() = currentExercise?.let { completedSetCountForCurrentExercise >= it.targetSets } ?: false
+        get() {
+            val exercise = currentExercise ?: return false
+            return loggedWarmupSets.size >= exercise.warmupSets &&
+                loggedWorkingSets.size >= exercise.workingSets
+        }
 
     val isLastExercise: Boolean
         get() = currentExerciseIndex >= exercises.size - 1
@@ -72,31 +86,10 @@ class WorkoutSessionViewModel(
     private val dayFlow: StateFlow<DayWithExercises?> = repository.observeDayWithExercises(dayId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val uiState: StateFlow<WorkoutSessionUiState> = combine(
-        dayFlow, _stage, _currentExerciseIndex, _sessionId, _sessionStartedAt, _previousBest
-    ) { values ->
-        val day = values[0] as DayWithExercises?
-        val stage = values[1] as SessionStage
-        val exerciseIndex = values[2] as Int
-        val sessionId = values[3] as Long
-        val startedAt = values[4] as Long
-        val previousBest = values[5] as LoggedSetEntity?
-        val exercises = day?.exercises.orEmpty()
-        WorkoutSessionUiState(
-            dayTitle = day?.day?.title ?: "",
-            stage = stage,
-            warmupMinutes = day?.day?.warmupMinutes ?: 5,
-            exercises = exercises,
-            currentExerciseIndex = exerciseIndex,
-            previousBestForCurrentExercise = previousBest,
-            sessionId = sessionId,
-            sessionStartedAtMillis = startedAt,
-            isLoaded = day != null
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkoutSessionUiState())
-
     // Logged sets for whichever exercise is currently active, refreshed live as the
-    // session/exercise selection changes.
+    // session/exercise selection changes. Feeds into uiState below so that
+    // state.isInWarmupSubstage (used by logCurrentSet) reflects reality rather
+    // than always seeing an empty list.
     val loggedSetsForCurrentExercise: StateFlow<List<LoggedSetEntity>> =
         combine(_sessionId, _currentExerciseIndex, dayFlow) { sessionId, index, day ->
             Pair(sessionId, day?.exercises?.getOrNull(index)?.exerciseId)
@@ -109,6 +102,32 @@ class WorkoutSessionViewModel(
                 emptyFlow()
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val uiState: StateFlow<WorkoutSessionUiState> = combine(
+        dayFlow, _stage, _currentExerciseIndex, _sessionId, _sessionStartedAt, _previousBest, loggedSetsForCurrentExercise
+    ) { values ->
+        val day = values[0] as DayWithExercises?
+        val stage = values[1] as SessionStage
+        val exerciseIndex = values[2] as Int
+        val sessionId = values[3] as Long
+        val startedAt = values[4] as Long
+        val previousBest = values[5] as LoggedSetEntity?
+        @Suppress("UNCHECKED_CAST")
+        val loggedSets = values[6] as List<LoggedSetEntity>
+        val exercises = day?.exercises.orEmpty()
+        WorkoutSessionUiState(
+            dayTitle = day?.day?.title ?: "",
+            stage = stage,
+            warmupMinutes = day?.day?.warmupMinutes ?: 5,
+            exercises = exercises,
+            currentExerciseIndex = exerciseIndex,
+            loggedSetsForCurrentExercise = loggedSets,
+            previousBestForCurrentExercise = previousBest,
+            sessionId = sessionId,
+            sessionStartedAtMillis = startedAt,
+            isLoaded = day != null
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkoutSessionUiState())
 
     /** Total sets logged across the whole session (all exercises), for the finish summary. */
     val totalLoggedSetsForSession: StateFlow<Int> = _sessionId.flatMapLatest { sessionId ->
@@ -166,19 +185,27 @@ class WorkoutSessionViewModel(
         _draft.value = _draft.value.copy(note = value)
     }
 
-    /** Logs the current draft as the next set for the current exercise, then auto-starts rest. */
+    /**
+     * Logs the current draft as the next set for the current exercise — into
+     * the warmup stage while warmup sets are still outstanding, otherwise
+     * into working sets — then auto-starts rest, unless this was the
+     * exercise's very last set overall.
+     */
     fun logCurrentSet() {
         val state = uiState.value
         val exercise = state.currentExercise ?: return
         val weight = _draft.value.weight.toDoubleOrNull() ?: return
         val reps = _draft.value.reps.toIntOrNull() ?: return
         val note = _draft.value.note
+        val isWarmup = state.isInWarmupSubstage
 
         viewModelScope.launch {
-            val setNumber = loggedSetsForCurrentExercise.value.size + 1
+            val stageSets = if (isWarmup) state.loggedWarmupSets else state.loggedWorkingSets
+            val setNumber = stageSets.size + 1
             repository.logSet(
                 sessionId = state.sessionId,
                 exerciseId = exercise.exerciseId,
+                isWarmup = isWarmup,
                 setNumber = setNumber,
                 weight = weight,
                 reps = reps,
@@ -188,8 +215,12 @@ class WorkoutSessionViewModel(
             // sets), but clear reps/note so they don't carry over by accident.
             _draft.value = SetEntryDraft(weight = _draft.value.weight)
 
-            // Auto-start rest timer, unless this was the exercise's final set.
-            val willBeComplete = setNumber >= exercise.targetSets
+            // Auto-start rest timer, unless this was the exercise's final set overall.
+            val willBeComplete = if (isWarmup) {
+                (setNumber >= exercise.warmupSets) && exercise.workingSets == 0
+            } else {
+                setNumber >= exercise.workingSets
+            }
             if (!willBeComplete) {
                 timerController.start(TimerType.REST, exercise.restSeconds, "Rest · ${exercise.name}")
             }

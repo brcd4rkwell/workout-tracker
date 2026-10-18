@@ -30,6 +30,7 @@ fun WeekDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
     var dayPendingDelete by remember { mutableStateOf<DayEntity?>(null) }
+    var dayPendingRename by remember { mutableStateOf<DayEntity?>(null) }
 
     val week = weekWithDays?.week
     val days = weekWithDays?.days.orEmpty()
@@ -96,7 +97,8 @@ fun WeekDetailScreen(
                         DayRow(
                             day = day,
                             onClick = { onOpenDay(day.dayId) },
-                            onDeleteRequest = { dayPendingDelete = day }
+                            onDeleteRequest = { dayPendingDelete = day },
+                            onRenameRequest = { dayPendingRename = day }
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -159,13 +161,28 @@ fun WeekDetailScreen(
             }
         )
     }
+
+    dayPendingRename?.let { target ->
+        TextFieldDialog(
+            title = "Rename Day",
+            label = "Day title",
+            initialValue = target.title,
+            confirmLabel = "Save",
+            onDismiss = { dayPendingRename = null },
+            onConfirm = { newTitle ->
+                viewModel.renameDay(target, newTitle)
+                dayPendingRename = null
+            }
+        )
+    }
 }
 
 @Composable
 private fun DayRow(
     day: DayEntity,
     onClick: () -> Unit,
-    onDeleteRequest: () -> Unit
+    onDeleteRequest: () -> Unit,
+    onRenameRequest: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -201,6 +218,14 @@ private fun DayRow(
                     Icon(Icons.Filled.MoreVert, contentDescription = "Day options")
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Rename day") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        onClick = {
+                            showMenu = false
+                            onRenameRequest()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Delete day") },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },

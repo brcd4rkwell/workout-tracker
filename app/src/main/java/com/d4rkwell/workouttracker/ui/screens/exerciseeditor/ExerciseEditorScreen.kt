@@ -1,5 +1,8 @@
 package com.d4rkwell.workouttracker.ui.screens.exerciseeditor
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -7,16 +10,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.util.formatSeconds
 
-private val RestPresets = listOf(30, 60, 90, 120, 180)
+private val RestPresets = listOf(60, 90, 120, 150, 180, 240, 300) // 1m, 1:30, 2m, 2:30, 3m, 4m, 5m
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +31,7 @@ fun ExerciseEditorScreen(
     onSaved: () -> Unit
 ) {
     val form by viewModel.form.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -63,26 +69,35 @@ fun ExerciseEditorScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = form.muscleGroup,
-                onValueChange = viewModel::updateMuscleGroup,
-                label = { Text("Muscle group (optional)") },
-                placeholder = { Text("e.g. Chest") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Text("Sets & Reps", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Warmup & Working Sets", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = form.targetSets,
-                    onValueChange = viewModel::updateSets,
-                    label = { Text("Sets") },
+                    value = form.warmupSets,
+                    onValueChange = viewModel::updateWarmupSets,
+                    label = { Text("Warmup sets") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
+                OutlinedTextField(
+                    value = form.workingSets,
+                    onValueChange = viewModel::updateWorkingSets,
+                    label = { Text("Working sets") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                "Warmup sets are light ramp-up sets logged before your working sets. Set to 0 if this exercise doesn't need any.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Text("Reps", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = form.targetRepsLow,
                     onValueChange = viewModel::updateRepsLow,
@@ -117,7 +132,10 @@ fun ExerciseEditorScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
                 RestPresets.forEach { preset ->
                     val selected = form.restSeconds.toIntOrNull() == preset
                     FilterChip(
@@ -137,6 +155,37 @@ fun ExerciseEditorScreen(
                 minLines = 2,
                 maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            Text("How-To Video", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = form.videoUrl,
+                onValueChange = viewModel::updateVideoUrl,
+                label = { Text("YouTube link (optional)") },
+                placeholder = { Text("https://youtube.com/watch?v=...") },
+                singleLine = true,
+                trailingIcon = {
+                    if (form.videoUrl.isNotBlank()) {
+                        IconButton(onClick = {
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(form.videoUrl))
+                                )
+                            } catch (_: Exception) {
+                                // Malformed or unopenable link — silently ignore rather than crash;
+                                // the person can fix the URL text directly.
+                            }
+                        }) {
+                            Icon(Icons.Filled.PlayCircle, contentDescription = "Watch video")
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "Shows a Watch button next to this exercise during your workout.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(Modifier.height(8.dp))

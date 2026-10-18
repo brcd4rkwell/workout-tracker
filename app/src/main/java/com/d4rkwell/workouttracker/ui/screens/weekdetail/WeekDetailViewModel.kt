@@ -30,6 +30,10 @@ class WeekDetailViewModel(
         viewModelScope.launch { repository.deleteDay(day) }
     }
 
+    fun renameDay(day: DayEntity, newTitle: String) {
+        viewModelScope.launch { repository.updateDay(day.copy(title = newTitle)) }
+    }
+
     fun updateWeekNote(week: WeekEntity, note: String) {
         viewModelScope.launch { repository.updateWeek(week.copy(note = note)) }
     }

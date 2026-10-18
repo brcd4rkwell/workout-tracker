@@ -29,4 +29,8 @@ class WeekListViewModel(private val repository: WorkoutRepository) : ViewModel()
     fun renameWeek(week: WeekEntity, newTitle: String) {
         viewModelScope.launch { repository.updateWeek(week.copy(title = newTitle)) }
     }
+
+    fun duplicateWeek(weekId: Long) {
+        viewModelScope.launch { repository.duplicateWeek(weekId) }
+    }
 }

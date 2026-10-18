@@ -36,7 +36,8 @@ data class LoggedSetEntity(
     val sessionId: Long,
     val exerciseId: Long,
     val exerciseName: String = "", // snapshot of the exercise's name at the time this set was logged
-    val setNumber: Int,             // 1-based position within this exercise for this session
+    val isWarmup: Boolean = false,  // true for a warmup-stage set, false for a working set
+    val setNumber: Int,             // 1-based position within its stage (warmup or working) for this session
     val weight: Double,
     val reps: Int,
     val note: String = "",          // optional quick note for this specific set

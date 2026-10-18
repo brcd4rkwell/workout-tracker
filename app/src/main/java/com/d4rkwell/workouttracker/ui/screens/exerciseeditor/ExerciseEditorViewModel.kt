@@ -11,12 +11,13 @@ import kotlinx.coroutines.launch
 
 data class ExerciseFormState(
     val name: String = "",
-    val targetSets: String = "3",
+    val warmupSets: String = "0",
+    val workingSets: String = "3",
     val targetRepsLow: String = "8",
     val targetRepsHigh: String = "12",
     val restSeconds: String = "90",
     val note: String = "",
-    val muscleGroup: String = "",
+    val videoUrl: String = "",
     val isLoaded: Boolean = false,
     val isEditing: Boolean = false
 )
@@ -40,12 +41,13 @@ class ExerciseEditorViewModel(
                 if (exercise != null) {
                     _form.value = ExerciseFormState(
                         name = exercise.name,
-                        targetSets = exercise.targetSets.toString(),
+                        warmupSets = exercise.warmupSets.toString(),
+                        workingSets = exercise.workingSets.toString(),
                         targetRepsLow = exercise.targetRepsLow.toString(),
                         targetRepsHigh = exercise.targetRepsHigh.toString(),
                         restSeconds = exercise.restSeconds.toString(),
                         note = exercise.note,
-                        muscleGroup = exercise.muscleGroup,
+                        videoUrl = exercise.videoUrl,
                         isLoaded = true,
                         isEditing = true
                     )
@@ -57,18 +59,20 @@ class ExerciseEditorViewModel(
     }
 
     fun updateName(value: String) { _form.value = _form.value.copy(name = value) }
-    fun updateSets(value: String) { _form.value = _form.value.copy(targetSets = value.filter { it.isDigit() }) }
+    fun updateWarmupSets(value: String) { _form.value = _form.value.copy(warmupSets = value.filter { it.isDigit() }) }
+    fun updateWorkingSets(value: String) { _form.value = _form.value.copy(workingSets = value.filter { it.isDigit() }) }
     fun updateRepsLow(value: String) { _form.value = _form.value.copy(targetRepsLow = value.filter { it.isDigit() }) }
     fun updateRepsHigh(value: String) { _form.value = _form.value.copy(targetRepsHigh = value.filter { it.isDigit() }) }
     fun updateRestSeconds(value: String) { _form.value = _form.value.copy(restSeconds = value.filter { it.isDigit() }) }
     fun updateNote(value: String) { _form.value = _form.value.copy(note = value) }
-    fun updateMuscleGroup(value: String) { _form.value = _form.value.copy(muscleGroup = value) }
+    fun updateVideoUrl(value: String) { _form.value = _form.value.copy(videoUrl = value) }
 
     val isValid: Boolean
         get() {
             val f = _form.value
             return f.name.isNotBlank() &&
-                (f.targetSets.toIntOrNull() ?: 0) > 0 &&
+                (f.workingSets.toIntOrNull() ?: 0) > 0 &&
+                (f.warmupSets.toIntOrNull() ?: -1) >= 0 &&
                 (f.targetRepsLow.toIntOrNull() ?: 0) > 0 &&
                 (f.targetRepsHigh.toIntOrNull() ?: 0) > 0 &&
                 (f.restSeconds.toIntOrNull() ?: -1) >= 0
@@ -76,7 +80,8 @@ class ExerciseEditorViewModel(
 
     fun save(onDone: () -> Unit) {
         val f = _form.value
-        val sets = f.targetSets.toIntOrNull() ?: return
+        val warmup = f.warmupSets.toIntOrNull() ?: 0
+        val working = f.workingSets.toIntOrNull() ?: return
         val repsLow = f.targetRepsLow.toIntOrNull() ?: return
         val repsHigh = f.targetRepsHigh.toIntOrNull() ?: return
         val rest = f.restSeconds.toIntOrNull() ?: return
@@ -88,24 +93,26 @@ class ExerciseEditorViewModel(
                 repository.updateExercise(
                     existing.copy(
                         name = f.name.trim(),
-                        targetSets = sets,
+                        warmupSets = warmup,
+                        workingSets = working,
                         targetRepsLow = repsLow,
                         targetRepsHigh = normalizedHigh,
                         restSeconds = rest,
                         note = f.note.trim(),
-                        muscleGroup = f.muscleGroup.trim()
+                        videoUrl = f.videoUrl.trim()
                     )
                 )
             } else {
                 repository.addExercise(
                     dayId = dayId,
                     name = f.name.trim(),
-                    targetSets = sets,
+                    warmupSets = warmup,
+                    workingSets = working,
                     targetRepsLow = repsLow,
                     targetRepsHigh = normalizedHigh,
                     restSeconds = rest,
                     note = f.note.trim(),
-                    muscleGroup = f.muscleGroup.trim()
+                    videoUrl = f.videoUrl.trim()
                 )
             }
             onDone()

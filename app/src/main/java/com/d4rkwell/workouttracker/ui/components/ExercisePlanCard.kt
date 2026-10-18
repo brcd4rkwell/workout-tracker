@@ -6,7 +6,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +24,7 @@ fun ExercisePlanCard(
     exercise: ExerciseEntity,
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit,
+    onWatchVideo: (() -> Unit)? = null,
     showDragHandle: Boolean = false
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -47,7 +50,11 @@ fun ExercisePlanCard(
                 Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatChip(label = "${exercise.targetSets} sets")
+                    if (exercise.warmupSets > 0) {
+                        StatChip(label = "${exercise.warmupSets} warmup")
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    StatChip(label = "${exercise.workingSets} working")
                     Spacer(Modifier.width(6.dp))
                     StatChip(label = "${formatRepRange(exercise.targetRepsLow, exercise.targetRepsHigh)} reps")
                     Spacer(Modifier.width(6.dp))
@@ -68,6 +75,24 @@ fun ExercisePlanCard(
                     Icon(Icons.Filled.MoreVert, contentDescription = "Exercise options")
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Edit exercise") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        onClick = {
+                            showMenu = false
+                            onClick()
+                        }
+                    )
+                    if (onWatchVideo != null && exercise.videoUrl.isNotBlank()) {
+                        DropdownMenuItem(
+                            text = { Text("Watch video") },
+                            leadingIcon = { Icon(Icons.Filled.PlayCircle, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onWatchVideo()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Delete exercise") },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },

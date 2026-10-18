@@ -23,6 +23,8 @@ import com.d4rkwell.workouttracker.ui.screens.weekdetail.WeekDetailScreen
 import com.d4rkwell.workouttracker.ui.screens.weekdetail.WeekDetailViewModel
 import com.d4rkwell.workouttracker.ui.screens.weeklist.WeekListScreen
 import com.d4rkwell.workouttracker.ui.screens.weeklist.WeekListViewModel
+import com.d4rkwell.workouttracker.ui.screens.weightprogress.WeightProgressScreen
+import com.d4rkwell.workouttracker.ui.screens.weightprogress.WeightProgressViewModel
 import com.d4rkwell.workouttracker.ui.screens.workoutsession.WorkoutSessionScreen
 import com.d4rkwell.workouttracker.ui.screens.workoutsession.WorkoutSessionViewModel
 import com.d4rkwell.workouttracker.util.GenericViewModelFactory
@@ -41,7 +43,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             WeekListScreen(
                 viewModel = vm,
                 onOpenWeek = { weekId -> navController.navigate(Destinations.weekDetail(weekId)) },
-                onOpenHistory = { navController.navigate(Destinations.HISTORY) }
+                onOpenHistory = { navController.navigate(Destinations.HISTORY) },
+                onOpenWeightProgress = { navController.navigate(Destinations.WEIGHT_PROGRESS) }
             )
         }
 
@@ -133,6 +136,16 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                 factory = GenericViewModelFactory { HistoryDetailViewModel(repository, sessionId) }
             )
             HistoryDetailScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Destinations.WEIGHT_PROGRESS) {
+            val vm: WeightProgressViewModel = viewModel(
+                factory = GenericViewModelFactory { WeightProgressViewModel(repository) }
+            )
+            WeightProgressScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() }
             )

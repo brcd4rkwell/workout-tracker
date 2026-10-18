@@ -1,5 +1,7 @@
 package com.d4rkwell.workouttracker.ui.screens.dayeditor
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.ExerciseEntity
@@ -28,6 +31,7 @@ fun DayEditorScreen(
     onStartWorkout: () -> Unit
 ) {
     val dayWithExercises by viewModel.dayWithExercises.collectAsState()
+    val context = LocalContext.current
     var showRenameDialog by remember { mutableStateOf(false) }
     var showWarmupDialog by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
@@ -146,7 +150,14 @@ fun DayEditorScreen(
                         ExercisePlanCard(
                             exercise = exercise,
                             onClick = { onOpenExercise(exercise.exerciseId) },
-                            onDeleteRequest = { exercisePendingDelete = exercise }
+                            onDeleteRequest = { exercisePendingDelete = exercise },
+                            onWatchVideo = {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(exercise.videoUrl)))
+                                } catch (_: Exception) {
+                                    // Malformed/unopenable link — ignore rather than crash.
+                                }
+                            }
                         )
                     }
                 }

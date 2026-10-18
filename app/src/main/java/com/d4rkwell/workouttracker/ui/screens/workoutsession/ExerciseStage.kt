@@ -1,9 +1,8 @@
 package com.d4rkwell.workouttracker.ui.screens.workoutsession
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,7 +31,9 @@ fun ExerciseStage(
     exercise: ExerciseEntity,
     exerciseIndex: Int,
     totalExercises: Int,
-    loggedSets: List<LoggedSetEntity>,
+    loggedWarmupSets: List<LoggedSetEntity>,
+    loggedWorkingSets: List<LoggedSetEntity>,
+    isInWarmupSubstage: Boolean,
     previousBest: LoggedSetEntity?,
     draftWeight: String,
     draftReps: String,
@@ -47,6 +48,7 @@ fun ExerciseStage(
     onAddTimerSeconds: (Int) -> Unit,
     onPrevExercise: () -> Unit,
     onNextExercise: () -> Unit,
+    onWatchVideo: () -> Unit,
     canGoPrev: Boolean,
     isLastExercise: Boolean
 ) {
@@ -63,7 +65,22 @@ fun ExerciseStage(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(4.dp))
-        Text(exercise.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                exercise.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            if (exercise.videoUrl.isNotBlank()) {
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onWatchVideo, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+                    Icon(Icons.Filled.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Watch")
+                }
+            }
+        }
 
         if (exercise.note.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
@@ -82,7 +99,11 @@ fun ExerciseStage(
 
         Spacer(Modifier.height(10.dp))
         Row {
-            InfoChip("${exercise.targetSets} sets")
+            if (exercise.warmupSets > 0) {
+                InfoChip("${exercise.warmupSets} warmup")
+                Spacer(Modifier.width(6.dp))
+            }
+            InfoChip("${exercise.workingSets} working")
             Spacer(Modifier.width(6.dp))
             InfoChip("${formatRepRange(exercise.targetRepsLow, exercise.targetRepsHigh)} reps")
             Spacer(Modifier.width(6.dp))
@@ -110,19 +131,38 @@ fun ExerciseStage(
             Spacer(Modifier.height(16.dp))
         }
 
-        // Completed sets list
-        Text("Sets completed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
+        // Warmup sets section (only shown when this exercise has any)
+        if (exercise.warmupSets > 0) {
+            Text("Warmup sets", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            if (loggedWarmupSets.isEmpty()) {
+                Text(
+                    "No warmup sets logged yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    loggedWarmupSets.forEach { set ->
+                        LoggedSetRow(set = set, onDelete = { onDeleteSet(set) })
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
-        if (loggedSets.isEmpty()) {
+        // Working sets section
+        Text("Working sets", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        if (loggedWorkingSets.isEmpty()) {
             Text(
-                "No sets logged yet for this exercise.",
+                "No working sets logged yet.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                loggedSets.forEach { set ->
+                loggedWorkingSets.forEach { set ->
                     LoggedSetRow(set = set, onDelete = { onDeleteSet(set) })
                 }
             }
@@ -130,7 +170,10 @@ fun ExerciseStage(
 
         Spacer(Modifier.height(20.dp))
 
-        val setsRemaining = exercise.targetSets - loggedSets.size
+        val targetForCurrentSubstage = if (isInWarmupSubstage) exercise.warmupSets else exercise.workingSets
+        val loggedForCurrentSubstage = if (isInWarmupSubstage) loggedWarmupSets.size else loggedWorkingSets.size
+        val setsRemaining = targetForCurrentSubstage - loggedForCurrentSubstage
+
         if (setsRemaining > 0) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
@@ -138,28 +181,44 @@ fun ExerciseStage(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Log set ${loggedSets.size + 1} of ${exercise.targetSets}",
+                        if (isInWarmupSubstage)
+                            "Log warmup set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage"
+                        else
+                            "Log working set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = draftWeight,
-                            onValueChange = onDraftWeightChange,
-                            label = { Text("Weight") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = draftReps,
-                            onValueChange = onDraftRepsChange,
-                            label = { Text("Reps") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
+                    // Keying these fields by exercise id + warmup/working stage gives each
+                    // one a distinct Compose identity, so the keyboard correctly switches
+                    // to the numeric layout instead of getting stuck on whatever keyboard
+                    // type a previously-focused text field (like the exercise name field)
+                    // last used.
+                    androidx.compose.runtime.key(exercise.exerciseId, isInWarmupSubstage) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedTextField(
+                                value = draftWeight,
+                                onValueChange = onDraftWeightChange,
+                                label = { Text("Weight") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = draftReps,
+                                onValueChange = onDraftRepsChange,
+                                label = { Text("Reps") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
@@ -179,7 +238,7 @@ fun ExerciseStage(
                     ) {
                         Icon(Icons.Filled.Check, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Set")
+                        Text(if (isInWarmupSubstage) "Log Warmup Set" else "Log Set")
                     }
                 }
             }
