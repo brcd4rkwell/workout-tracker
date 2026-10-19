@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.d4rkwell.workouttracker.ui.components.ClearableTextField
 import com.d4rkwell.workouttracker.util.formatSeconds
 
 private val RestPresets = listOf(60, 90, 120, 150, 180, 240, 300) // 1m, 1:30, 2m, 2:30, 3m, 4m, 5m
@@ -60,12 +61,11 @@ fun ExerciseEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
+            ClearableTextField(
                 value = form.name,
                 onValueChange = viewModel::updateName,
-                label = { Text("Exercise name") },
-                placeholder = { Text("e.g. Barbell Bench Press") },
-                singleLine = true,
+                label = "Exercise name",
+                placeholder = "e.g. Barbell Bench Press",
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -147,25 +147,25 @@ fun ExerciseEditorScreen(
             }
 
             Text("Your Note", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(
+            ClearableTextField(
                 value = form.note,
                 onValueChange = viewModel::updateNote,
-                label = { Text("Note (shown next to the exercise name)") },
-                placeholder = { Text("e.g. \"keep elbows tucked\", \"use the cambered bar\"") },
+                label = "Note (shown next to the exercise name)",
+                placeholder = "e.g. \"keep elbows tucked\", \"use the cambered bar\"",
+                singleLine = false,
                 minLines = 2,
                 maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
             )
 
             Text("How-To Video", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(
+            ClearableTextField(
                 value = form.videoUrl,
                 onValueChange = viewModel::updateVideoUrl,
-                label = { Text("YouTube link (optional)") },
-                placeholder = { Text("https://youtube.com/watch?v=...") },
-                singleLine = true,
-                trailingIcon = {
-                    if (form.videoUrl.isNotBlank()) {
+                label = "YouTube link (optional)",
+                placeholder = "https://youtube.com/watch?v=...",
+                extraTrailingContent = if (form.videoUrl.isNotBlank()) {
+                    {
                         IconButton(onClick = {
                             try {
                                 context.startActivity(
@@ -179,7 +179,7 @@ fun ExerciseEditorScreen(
                             Icon(Icons.Filled.PlayCircle, contentDescription = "Watch video")
                         }
                     }
-                },
+                } else null,
                 modifier = Modifier.fillMaxWidth()
             )
             Text(

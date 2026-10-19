@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -17,6 +18,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -134,13 +137,17 @@ fun WeekListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(weeks, key = { it.week.weekId }) { weekWithDays ->
+                itemsIndexed(weeks, key = { _, item -> item.week.weekId }) { index, weekWithDays ->
                     WeekRow(
                         weekWithDays = weekWithDays,
                         onClick = { onOpenWeek(weekWithDays.week.weekId) },
                         onDeleteRequest = { weekPendingDelete = weekWithDays },
                         onRenameRequest = { weekPendingRename = weekWithDays },
-                        onDuplicate = { viewModel.duplicateWeek(weekWithDays.week.weekId) }
+                        onDuplicate = { viewModel.duplicateWeek(weekWithDays.week.weekId) },
+                        onMoveUp = { viewModel.moveWeekUp(weekWithDays.week.weekId) },
+                        onMoveDown = { viewModel.moveWeekDown(weekWithDays.week.weekId) },
+                        canMoveUp = index > 0,
+                        canMoveDown = index < weeks.size - 1
                     )
                 }
                 item { Spacer(Modifier.height(72.dp)) }
@@ -235,7 +242,11 @@ private fun WeekRow(
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit,
     onRenameRequest: () -> Unit,
-    onDuplicate: () -> Unit
+    onDuplicate: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -268,6 +279,31 @@ private fun WeekRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
+                    )
+                }
+            }
+
+            Column {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = canMoveUp,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = "Move week up",
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = canMoveDown,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Move week down",
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                     )
                 }
             }

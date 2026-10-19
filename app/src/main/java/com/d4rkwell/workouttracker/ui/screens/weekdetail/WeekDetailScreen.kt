@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -93,12 +94,16 @@ fun WeekDetailScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(days, key = { it.dayId }) { day ->
+                    itemsIndexed(days, key = { _, item -> item.dayId }) { index, day ->
                         DayRow(
                             day = day,
                             onClick = { onOpenDay(day.dayId) },
                             onDeleteRequest = { dayPendingDelete = day },
-                            onRenameRequest = { dayPendingRename = day }
+                            onRenameRequest = { dayPendingRename = day },
+                            onMoveUp = { viewModel.moveDayUp(day.dayId) },
+                            onMoveDown = { viewModel.moveDayDown(day.dayId) },
+                            canMoveUp = index > 0,
+                            canMoveDown = index < days.size - 1
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -117,7 +122,9 @@ fun WeekDetailScreen(
             onDismiss = { showAddDayDialog = false },
             onConfirm = { title ->
                 showAddDayDialog = false
-                viewModel.addDay(title) { newId -> onOpenDay(newId) }
+                // Just add the day and stay here — the user taps into it
+                // themselves when they're ready to add exercises.
+                viewModel.addDay(title) { }
             }
         )
     }
@@ -182,7 +189,11 @@ private fun DayRow(
     day: DayEntity,
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit,
-    onRenameRequest: () -> Unit
+    onRenameRequest: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -212,6 +223,30 @@ private fun DayRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            Column {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = canMoveUp,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = "Move day up",
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = canMoveDown,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Move day down",
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
             }
             Box {
                 IconButton(onClick = { showMenu = true }) {

@@ -221,12 +221,11 @@ fun ExerciseStage(
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
+                    com.d4rkwell.workouttracker.ui.components.ClearableTextField(
                         value = draftNote,
                         onValueChange = onDraftNoteChange,
-                        label = { Text("Note (optional)") },
-                        placeholder = { Text("e.g. felt heavy, used belt") },
-                        singleLine = true,
+                        label = "Note (optional)",
+                        placeholder = "e.g. felt heavy, used belt",
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(14.dp))

@@ -21,13 +21,16 @@ import com.d4rkwell.workouttracker.data.local.entity.WorkoutSessionEntity
  * The single local database for the whole app. Everything lives on-device
  * only — there is no network/sync layer, by design (fully offline app).
  *
- * Schema version bumped to 2 for the warmup/working-sets split, the
- * exercise video link, and bodyweight tracking. Since this app has no
- * released users yet (early development), we use destructive fallback
- * rather than a hand-written migration — an app update will reset the
- * local database once. If this app is already in real use by the time
- * you read this comment, replace fallbackToDestructiveMigration() with a
- * proper Migration(1, 2) instead, to preserve existing data.
+ * Schema version 3: added indices on workout_sessions.startedAtEpochMillis
+ * and logged_sets.loggedAtEpochMillis to keep history queries fast as
+ * logged data grows. Still using destructive fallback rather than a
+ * hand-written migration (this app is still in active early development
+ * with no external users) — an update to this version wipes the local
+ * database once. The app now has a Backup feature (see the backup/
+ * package): back up before installing this update, then restore
+ * afterward, to avoid losing anything. If this app reaches real outside
+ * users before the next schema change, replace
+ * fallbackToDestructiveMigration() with a proper Migration() instead.
  */
 @Database(
     entities = [
@@ -38,7 +41,7 @@ import com.d4rkwell.workouttracker.data.local.entity.WorkoutSessionEntity
         LoggedSetEntity::class,
         WeightEntryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

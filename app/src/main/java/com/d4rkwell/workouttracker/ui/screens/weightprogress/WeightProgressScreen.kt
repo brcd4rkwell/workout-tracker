@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.WeightEntryEntity
+import com.d4rkwell.workouttracker.ui.components.ClearableTextField
 import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
 import com.d4rkwell.workouttracker.ui.components.EmptyState
 import com.d4rkwell.workouttracker.util.formatDate
@@ -201,20 +202,18 @@ private fun AddWeightDialog(
         title = { Text("Log Weight") },
         text = {
             Column {
-                OutlinedTextField(
+                ClearableTextField(
                     value = weightText,
                     onValueChange = { weightText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("Weight") },
+                    label = "Weight",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
+                ClearableTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
-                    label = { Text("Note (optional)") },
-                    singleLine = true,
+                    label = "Note (optional)",
                     modifier = Modifier.fillMaxWidth()
                 )
             }

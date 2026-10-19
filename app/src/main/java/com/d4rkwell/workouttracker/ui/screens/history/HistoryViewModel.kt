@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class HistorySessionRow(
     val session: WorkoutSessionEntity,
@@ -31,4 +32,8 @@ class HistoryViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun deleteSession(session: WorkoutSessionEntity) {
+        viewModelScope.launch { repository.discardSession(session) }
+    }
 }

@@ -11,11 +11,11 @@ import kotlinx.coroutines.launch
 
 data class ExerciseFormState(
     val name: String = "",
-    val warmupSets: String = "0",
-    val workingSets: String = "3",
-    val targetRepsLow: String = "8",
-    val targetRepsHigh: String = "12",
-    val restSeconds: String = "90",
+    val warmupSets: String = "",
+    val workingSets: String = "",
+    val targetRepsLow: String = "",
+    val targetRepsHigh: String = "",
+    val restSeconds: String = "",
     val note: String = "",
     val videoUrl: String = "",
     val isLoaded: Boolean = false,

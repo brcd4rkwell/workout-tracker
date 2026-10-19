@@ -34,4 +34,12 @@ class DayEditorViewModel(
     fun updateDayNote(day: DayEntity, note: String) {
         viewModelScope.launch { repository.updateDay(day.copy(note = note)) }
     }
+
+    fun moveExerciseUp(exerciseId: Long) {
+        viewModelScope.launch { repository.moveExercise(exerciseId, dayId, direction = -1) }
+    }
+
+    fun moveExerciseDown(exerciseId: Long) {
+        viewModelScope.launch { repository.moveExercise(exerciseId, dayId, direction = 1) }
+    }
 }

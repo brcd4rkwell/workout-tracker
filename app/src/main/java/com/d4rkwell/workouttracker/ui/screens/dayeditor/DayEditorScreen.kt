@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -146,11 +147,15 @@ fun DayEditorScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(exercises, key = { it.exerciseId }) { exercise ->
+                    itemsIndexed(exercises, key = { _, item -> item.exerciseId }) { index, exercise ->
                         ExercisePlanCard(
                             exercise = exercise,
                             onClick = { onOpenExercise(exercise.exerciseId) },
                             onDeleteRequest = { exercisePendingDelete = exercise },
+                            onMoveUp = { viewModel.moveExerciseUp(exercise.exerciseId) },
+                            onMoveDown = { viewModel.moveExerciseDown(exercise.exerciseId) },
+                            canMoveUp = index > 0,
+                            canMoveDown = index < exercises.size - 1,
                             onWatchVideo = {
                                 try {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(exercise.videoUrl)))

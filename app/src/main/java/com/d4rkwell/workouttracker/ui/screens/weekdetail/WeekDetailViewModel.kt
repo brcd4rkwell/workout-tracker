@@ -41,4 +41,12 @@ class WeekDetailViewModel(
     fun renameWeek(week: WeekEntity, newTitle: String) {
         viewModelScope.launch { repository.updateWeek(week.copy(title = newTitle)) }
     }
+
+    fun moveDayUp(dayId: Long) {
+        viewModelScope.launch { repository.moveDay(dayId, weekId, direction = -1) }
+    }
+
+    fun moveDayDown(dayId: Long) {
+        viewModelScope.launch { repository.moveDay(dayId, weekId, direction = 1) }
+    }
 }

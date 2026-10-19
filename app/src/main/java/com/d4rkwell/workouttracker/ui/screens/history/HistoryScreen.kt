@@ -8,14 +8,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
 import com.d4rkwell.workouttracker.ui.components.EmptyState
 import com.d4rkwell.workouttracker.util.formatDate
 import com.d4rkwell.workouttracker.util.formatDurationBetween
@@ -28,6 +28,7 @@ fun HistoryScreen(
     onOpenSession: (Long) -> Unit
 ) {
     val sessions by viewModel.sessions.collectAsState()
+    var sessionPendingDelete by remember { mutableStateOf<HistorySessionRow?>(null) }
 
     Scaffold(
         topBar = {
@@ -62,7 +63,7 @@ fun HistoryScreen(
                             .clickable { onOpenSession(row.session.sessionId) }
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
@@ -80,6 +81,9 @@ fun HistoryScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            IconButton(onClick = { sessionPendingDelete = row }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete this workout")
+                            }
                             Icon(
                                 Icons.Filled.ChevronRight,
                                 contentDescription = null,
@@ -90,5 +94,17 @@ fun HistoryScreen(
                 }
             }
         }
+    }
+
+    sessionPendingDelete?.let { target ->
+        ConfirmDialog(
+            title = "Delete this workout?",
+            message = "This permanently removes the ${target.dayTitle} session from ${formatDate(target.session.startedAtEpochMillis)}, including every set you logged in it.",
+            onDismiss = { sessionPendingDelete = null },
+            onConfirm = {
+                viewModel.deleteSession(target.session)
+                sessionPendingDelete = null
+            }
+        )
     }
 }

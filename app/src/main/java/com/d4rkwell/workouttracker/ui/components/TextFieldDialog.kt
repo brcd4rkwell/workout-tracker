@@ -20,11 +20,10 @@ fun TextFieldDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
+            ClearableTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text(label) },
-                singleLine = true,
+                label = label,
                 modifier = Modifier.fillMaxWidth()
             )
         },

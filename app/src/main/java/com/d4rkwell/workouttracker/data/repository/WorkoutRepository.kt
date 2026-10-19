@@ -99,6 +99,24 @@ class WorkoutRepository(
         return newWeekId
     }
 
+    /**
+     * Swaps a week with the one immediately before (direction = -1) or
+     * after (direction = +1) it in order. No-ops silently at either end
+     * of the list rather than erroring, since the UI simply disables the
+     * button at the ends.
+     */
+    suspend fun moveWeek(weekId: Long, direction: Int) {
+        val weeks = weekDao.observeAllWeeks().first().sortedBy { it.orderIndex }
+        val index = weeks.indexOfFirst { it.weekId == weekId }
+        val targetIndex = index + direction
+        if (index < 0 || targetIndex < 0 || targetIndex >= weeks.size) return
+
+        val current = weeks[index]
+        val target = weeks[targetIndex]
+        weekDao.update(current.copy(orderIndex = target.orderIndex))
+        weekDao.update(target.copy(orderIndex = current.orderIndex))
+    }
+
     // ---------- Days ----------
 
     fun observeDayWithExercises(dayId: Long): Flow<DayWithExercises?> =
@@ -122,6 +140,19 @@ class WorkoutRepository(
     suspend fun updateDay(day: DayEntity) = dayDao.update(day)
 
     suspend fun deleteDay(day: DayEntity) = dayDao.delete(day)
+
+    /** Swaps a day with its neighbor within the same week; see [moveWeek] for direction semantics. */
+    suspend fun moveDay(dayId: Long, weekId: Long, direction: Int) {
+        val days = dayDao.observeDaysForWeek(weekId).first().sortedBy { it.orderIndex }
+        val index = days.indexOfFirst { it.dayId == dayId }
+        val targetIndex = index + direction
+        if (index < 0 || targetIndex < 0 || targetIndex >= days.size) return
+
+        val current = days[index]
+        val target = days[targetIndex]
+        dayDao.update(current.copy(orderIndex = target.orderIndex))
+        dayDao.update(target.copy(orderIndex = current.orderIndex))
+    }
 
     // ---------- Exercises ----------
 
@@ -160,6 +191,19 @@ class WorkoutRepository(
     suspend fun getExercise(exerciseId: Long): ExerciseEntity? = exerciseDao.getExercise(exerciseId)
 
     fun observeExercise(exerciseId: Long): Flow<ExerciseEntity?> = exerciseDao.observeExercise(exerciseId)
+
+    /** Swaps an exercise with its neighbor within the same day; see [moveWeek] for direction semantics. */
+    suspend fun moveExercise(exerciseId: Long, dayId: Long, direction: Int) {
+        val exercises = exerciseDao.observeExercisesForDay(dayId).first().sortedBy { it.orderIndex }
+        val index = exercises.indexOfFirst { it.exerciseId == exerciseId }
+        val targetIndex = index + direction
+        if (index < 0 || targetIndex < 0 || targetIndex >= exercises.size) return
+
+        val current = exercises[index]
+        val target = exercises[targetIndex]
+        exerciseDao.update(current.copy(orderIndex = target.orderIndex))
+        exerciseDao.update(target.copy(orderIndex = current.orderIndex))
+    }
 
     // ---------- Sessions ----------
 

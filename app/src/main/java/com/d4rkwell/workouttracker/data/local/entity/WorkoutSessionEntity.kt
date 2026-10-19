@@ -17,7 +17,7 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "workout_sessions",
-    indices = [Index("dayId")]
+    indices = [Index("dayId"), Index("startedAtEpochMillis")]
 )
 data class WorkoutSessionEntity(
     @PrimaryKey(autoGenerate = true)
