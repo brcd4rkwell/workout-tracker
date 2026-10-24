@@ -100,21 +100,18 @@ class WorkoutRepository(
     }
 
     /**
-     * Swaps a week with the one immediately before (direction = -1) or
-     * after (direction = +1) it in order. No-ops silently at either end
-     * of the list rather than erroring, since the UI simply disables the
-     * button at the ends.
+     * Persists a full new ordering for all weeks at once — used after a
+     * drag-to-reorder gesture, where the UI already knows the final order
+     * and just needs it saved. [orderedWeekIds] must contain every
+     * existing week id, in its new desired order.
      */
-    suspend fun moveWeek(weekId: Long, direction: Int) {
-        val weeks = weekDao.observeAllWeeks().first().sortedBy { it.orderIndex }
-        val index = weeks.indexOfFirst { it.weekId == weekId }
-        val targetIndex = index + direction
-        if (index < 0 || targetIndex < 0 || targetIndex >= weeks.size) return
-
-        val current = weeks[index]
-        val target = weeks[targetIndex]
-        weekDao.update(current.copy(orderIndex = target.orderIndex))
-        weekDao.update(target.copy(orderIndex = current.orderIndex))
+    suspend fun reorderWeeks(orderedWeekIds: List<Long>) {
+        orderedWeekIds.forEachIndexed { index, weekId ->
+            val week = weekDao.getWeek(weekId) ?: return@forEachIndexed
+            if (week.orderIndex != index) {
+                weekDao.update(week.copy(orderIndex = index))
+            }
+        }
     }
 
     // ---------- Days ----------
@@ -141,17 +138,14 @@ class WorkoutRepository(
 
     suspend fun deleteDay(day: DayEntity) = dayDao.delete(day)
 
-    /** Swaps a day with its neighbor within the same week; see [moveWeek] for direction semantics. */
-    suspend fun moveDay(dayId: Long, weekId: Long, direction: Int) {
-        val days = dayDao.observeDaysForWeek(weekId).first().sortedBy { it.orderIndex }
-        val index = days.indexOfFirst { it.dayId == dayId }
-        val targetIndex = index + direction
-        if (index < 0 || targetIndex < 0 || targetIndex >= days.size) return
-
-        val current = days[index]
-        val target = days[targetIndex]
-        dayDao.update(current.copy(orderIndex = target.orderIndex))
-        dayDao.update(target.copy(orderIndex = current.orderIndex))
+    /** Persists a full new ordering for days within one week; see [reorderWeeks]. */
+    suspend fun reorderDays(orderedDayIds: List<Long>) {
+        orderedDayIds.forEachIndexed { index, dayId ->
+            val day = dayDao.getDay(dayId) ?: return@forEachIndexed
+            if (day.orderIndex != index) {
+                dayDao.update(day.copy(orderIndex = index))
+            }
+        }
     }
 
     // ---------- Exercises ----------
@@ -192,17 +186,14 @@ class WorkoutRepository(
 
     fun observeExercise(exerciseId: Long): Flow<ExerciseEntity?> = exerciseDao.observeExercise(exerciseId)
 
-    /** Swaps an exercise with its neighbor within the same day; see [moveWeek] for direction semantics. */
-    suspend fun moveExercise(exerciseId: Long, dayId: Long, direction: Int) {
-        val exercises = exerciseDao.observeExercisesForDay(dayId).first().sortedBy { it.orderIndex }
-        val index = exercises.indexOfFirst { it.exerciseId == exerciseId }
-        val targetIndex = index + direction
-        if (index < 0 || targetIndex < 0 || targetIndex >= exercises.size) return
-
-        val current = exercises[index]
-        val target = exercises[targetIndex]
-        exerciseDao.update(current.copy(orderIndex = target.orderIndex))
-        exerciseDao.update(target.copy(orderIndex = current.orderIndex))
+    /** Persists a full new ordering for exercises within one day; see [reorderWeeks]. */
+    suspend fun reorderExercises(orderedExerciseIds: List<Long>) {
+        orderedExerciseIds.forEachIndexed { index, exerciseId ->
+            val exercise = exerciseDao.getExercise(exerciseId) ?: return@forEachIndexed
+            if (exercise.orderIndex != index) {
+                exerciseDao.update(exercise.copy(orderIndex = index))
+            }
+        }
     }
 
     // ---------- Sessions ----------
@@ -254,6 +245,17 @@ class WorkoutRepository(
     suspend fun getMostRecentSetBeforeSession(exerciseId: Long, excludingSessionId: Long): LoggedSetEntity? =
         loggedSetDao.getMostRecentSetBeforeSession(exerciseId, excludingSessionId)
 
+    /**
+     * Your heaviest working set from the last time you did this exercise —
+     * used to show "Last used: 80kg x 8" on an exercise's plan card, so
+     * when you start a new week you can see what weight to aim for before
+     * you even begin a live workout.
+     */
+    suspend fun getLastTopWorkingSet(exerciseId: Long): LoggedSetEntity? {
+        val sessionId = loggedSetDao.getMostRecentSessionIdForExercise(exerciseId) ?: return null
+        return loggedSetDao.getHeaviestWorkingSetInSession(exerciseId, sessionId)
+    }
+
     suspend fun logSet(
         sessionId: Long,
         exerciseId: Long,
@@ -261,7 +263,8 @@ class WorkoutRepository(
         setNumber: Int,
         weight: Double,
         reps: Int,
-        note: String = ""
+        note: String = "",
+        extraParts: String = ""
     ): Long {
         val exerciseName = exerciseDao.getExercise(exerciseId)?.name ?: ""
         return loggedSetDao.insert(
@@ -274,7 +277,8 @@ class WorkoutRepository(
                 weight = weight,
                 reps = reps,
                 note = note,
-                loggedAtEpochMillis = System.currentTimeMillis()
+                loggedAtEpochMillis = System.currentTimeMillis(),
+                extraParts = extraParts
             )
         )
     }

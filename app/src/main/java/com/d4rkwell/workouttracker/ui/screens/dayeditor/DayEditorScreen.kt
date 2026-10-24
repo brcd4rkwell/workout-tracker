@@ -18,9 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.ExerciseEntity
 import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
+import com.d4rkwell.workouttracker.ui.components.DragHandleGrip
 import com.d4rkwell.workouttracker.ui.components.EmptyState
 import com.d4rkwell.workouttracker.ui.components.ExercisePlanCard
 import com.d4rkwell.workouttracker.ui.components.TextFieldDialog
+import com.d4rkwell.workouttracker.ui.components.dragReorderOffset
+import com.d4rkwell.workouttracker.ui.components.rememberDragReorderState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,19 +146,36 @@ fun DayEditorScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
+                var localExercises by remember(exercises) { mutableStateOf(exercises) }
+                val lastTopSets by viewModel.lastTopSets.collectAsState()
+                // Exercise cards have variable height (note / last-used line add
+                // extra lines), so this is an estimate rather than an exact
+                // measurement — drag-to-reorder still works, just maps touch
+                // distance to row-crossings approximately rather than precisely.
+                val rowHeight = 96.dp
+                val dragState = rememberDragReorderState(
+                    itemCount = localExercises.size,
+                    itemHeight = rowHeight,
+                    onMove = { from, to ->
+                        localExercises = localExercises.toMutableList().apply { add(to, removeAt(from)) }
+                    },
+                    onDragEnd = {
+                        viewModel.reorderExercises(localExercises.map { it.exerciseId })
+                    }
+                )
+
                 LazyColumn(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    itemsIndexed(exercises, key = { _, item -> item.exerciseId }) { index, exercise ->
+                    itemsIndexed(localExercises, key = { _, item -> item.exerciseId }) { index, exercise ->
                         ExercisePlanCard(
                             exercise = exercise,
                             onClick = { onOpenExercise(exercise.exerciseId) },
                             onDeleteRequest = { exercisePendingDelete = exercise },
-                            onMoveUp = { viewModel.moveExerciseUp(exercise.exerciseId) },
-                            onMoveDown = { viewModel.moveExerciseDown(exercise.exerciseId) },
-                            canMoveUp = index > 0,
-                            canMoveDown = index < exercises.size - 1,
+                            lastTopSet = lastTopSets[exercise.exerciseId],
+                            modifier = Modifier.dragReorderOffset(dragState, index),
+                            dragHandle = { DragHandleGrip(dragState, index) },
                             onWatchVideo = {
                                 try {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(exercise.videoUrl)))

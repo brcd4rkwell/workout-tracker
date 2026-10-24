@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.d4rkwell.workouttracker.data.local.entity.allParts
+import com.d4rkwell.workouttracker.data.local.entity.totalReps
 import com.d4rkwell.workouttracker.util.formatDate
 import com.d4rkwell.workouttracker.util.formatDurationBetween
 import com.d4rkwell.workouttracker.util.formatWeight
@@ -82,15 +84,42 @@ fun HistoryDetailScreen(
                         Text(group.exerciseName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         group.sets.forEach { set ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Set ${set.setNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    "${formatWeight(set.weight)} × ${set.reps}",
-                                    fontWeight = FontWeight.Medium
-                                )
+                            val parts = set.allParts()
+                            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                if (parts.size <= 1) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Set ${set.setNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(
+                                            "${formatWeight(set.weight)} × ${set.reps}",
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        "Set ${set.setNumber} (drop set)",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    parts.forEach { part ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(
+                                                "${formatWeight(part.weight)} × ${part.reps}",
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        "Total: ${set.totalReps()} reps",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             if (set.note.isNotBlank()) {
                                 Text(

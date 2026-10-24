@@ -18,8 +18,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -31,8 +29,11 @@ import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.backup.BackupManager
 import com.d4rkwell.workouttracker.data.local.entity.WeekWithDays
 import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
+import com.d4rkwell.workouttracker.ui.components.DragHandleGrip
 import com.d4rkwell.workouttracker.ui.components.EmptyState
 import com.d4rkwell.workouttracker.ui.components.TextFieldDialog
+import com.d4rkwell.workouttracker.ui.components.dragReorderOffset
+import com.d4rkwell.workouttracker.ui.components.rememberDragReorderState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +131,21 @@ fun WeekListScreen(
                 modifier = Modifier.padding(padding).fillMaxSize()
             )
         } else {
+            // Local mutable copy so dragging reorders instantly on screen; the
+            // real order is persisted to the database only once the drag ends.
+            var localWeeks by remember(weeks) { mutableStateOf(weeks) }
+            val rowHeight = 86.dp
+            val dragState = rememberDragReorderState(
+                itemCount = localWeeks.size,
+                itemHeight = rowHeight,
+                onMove = { from, to ->
+                    localWeeks = localWeeks.toMutableList().apply { add(to, removeAt(from)) }
+                },
+                onDragEnd = {
+                    viewModel.reorderWeeks(localWeeks.map { it.week.weekId })
+                }
+            )
+
             LazyColumn(
                 modifier = Modifier
                     .padding(padding)
@@ -137,17 +153,17 @@ fun WeekListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(weeks, key = { _, item -> item.week.weekId }) { index, weekWithDays ->
+                itemsIndexed(localWeeks, key = { _, item -> item.week.weekId }) { index, weekWithDays ->
                     WeekRow(
                         weekWithDays = weekWithDays,
                         onClick = { onOpenWeek(weekWithDays.week.weekId) },
                         onDeleteRequest = { weekPendingDelete = weekWithDays },
                         onRenameRequest = { weekPendingRename = weekWithDays },
                         onDuplicate = { viewModel.duplicateWeek(weekWithDays.week.weekId) },
-                        onMoveUp = { viewModel.moveWeekUp(weekWithDays.week.weekId) },
-                        onMoveDown = { viewModel.moveWeekDown(weekWithDays.week.weekId) },
-                        canMoveUp = index > 0,
-                        canMoveDown = index < weeks.size - 1
+                        modifier = Modifier
+                            .height(rowHeight)
+                            .dragReorderOffset(dragState, index),
+                        dragHandle = { DragHandleGrip(dragState, index) }
                     )
                 }
                 item { Spacer(Modifier.height(72.dp)) }
@@ -243,17 +259,15 @@ private fun WeekRow(
     onDeleteRequest: () -> Unit,
     onRenameRequest: () -> Unit,
     onDuplicate: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean
+    modifier: Modifier = Modifier,
+    dragHandle: @Composable () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
@@ -263,6 +277,8 @@ private fun WeekRow(
                 .padding(start = 16.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            dragHandle()
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(weekWithDays.week.title, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
@@ -279,31 +295,6 @@ private fun WeekRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
-                    )
-                }
-            }
-
-            Column {
-                IconButton(
-                    onClick = onMoveUp,
-                    enabled = canMoveUp,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowUp,
-                        contentDescription = "Move week up",
-                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
-                IconButton(
-                    onClick = onMoveDown,
-                    enabled = canMoveDown,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Move week down",
-                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                     )
                 }
             }

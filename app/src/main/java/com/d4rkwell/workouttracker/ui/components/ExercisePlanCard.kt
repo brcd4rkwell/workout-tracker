@@ -5,9 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
@@ -17,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.ExerciseEntity
+import com.d4rkwell.workouttracker.data.local.entity.LoggedSetEntity
 import com.d4rkwell.workouttracker.util.formatRepRange
 import com.d4rkwell.workouttracker.util.formatSeconds
+import com.d4rkwell.workouttracker.util.formatWeight
 
 @Composable
 fun ExercisePlanCard(
@@ -26,47 +27,23 @@ fun ExercisePlanCard(
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit,
     onWatchVideo: (() -> Unit)? = null,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
-    canMoveUp: Boolean = false,
-    canMoveDown: Boolean = false
+    lastTopSet: LoggedSetEntity? = null,
+    modifier: Modifier = Modifier,
+    dragHandle: (@Composable () -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (onMoveUp != null && onMoveDown != null) {
-                Column {
-                    IconButton(
-                        onClick = onMoveUp,
-                        enabled = canMoveUp,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.KeyboardArrowUp,
-                            contentDescription = "Move exercise up",
-                            tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                    IconButton(
-                        onClick = onMoveDown,
-                        enabled = canMoveDown,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.KeyboardArrowDown,
-                            contentDescription = "Move exercise down",
-                            tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                }
+            if (dragHandle != null) {
+                dragHandle()
                 Spacer(Modifier.width(6.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -82,6 +59,14 @@ fun ExercisePlanCard(
                     StatChip(label = "${formatRepRange(exercise.targetRepsLow, exercise.targetRepsHigh)} reps")
                     Spacer(Modifier.width(6.dp))
                     StatChip(label = "${formatSeconds(exercise.restSeconds)} rest")
+                }
+                if (lastTopSet != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Last used: ${formatWeight(lastTopSet.weight)} × ${lastTopSet.reps}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 if (exercise.note.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))

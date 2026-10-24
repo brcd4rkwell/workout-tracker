@@ -34,11 +34,7 @@ class WeekListViewModel(private val repository: WorkoutRepository) : ViewModel()
         viewModelScope.launch { repository.duplicateWeek(weekId) }
     }
 
-    fun moveWeekUp(weekId: Long) {
-        viewModelScope.launch { repository.moveWeek(weekId, direction = -1) }
-    }
-
-    fun moveWeekDown(weekId: Long) {
-        viewModelScope.launch { repository.moveWeek(weekId, direction = 1) }
+    fun reorderWeeks(orderedWeekIds: List<Long>) {
+        viewModelScope.launch { repository.reorderWeeks(orderedWeekIds) }
     }
 }

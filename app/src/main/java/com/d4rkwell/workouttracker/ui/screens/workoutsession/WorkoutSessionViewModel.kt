@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.d4rkwell.workouttracker.data.local.entity.DayWithExercises
 import com.d4rkwell.workouttracker.data.local.entity.ExerciseEntity
 import com.d4rkwell.workouttracker.data.local.entity.LoggedSetEntity
+import com.d4rkwell.workouttracker.data.local.entity.SetPart
+import com.d4rkwell.workouttracker.data.local.entity.toExtraPartsString
 import com.d4rkwell.workouttracker.data.repository.WorkoutRepository
 import com.d4rkwell.workouttracker.timer.TimerController
 import com.d4rkwell.workouttracker.timer.TimerType
@@ -22,11 +24,23 @@ import kotlinx.coroutines.launch
 /** Which stage of the session the user is currently in. */
 enum class SessionStage { WARMUP, EXERCISES, FINISHED }
 
+/** One extra weight×reps part being entered for a multi-part (drop) set, in draft form. */
+data class DraftSetPart(
+    val weight: String = "",
+    val reps: String = ""
+)
+
 data class SetEntryDraft(
     val weight: String = "",
     val reps: String = "",
-    val note: String = ""
-)
+    val note: String = "",
+    // Extra parts beyond the first weight/reps above — present only when
+    // the person has turned on multi-part entry for this set (a drop set:
+    // e.g. 25×4 then 20×6 logged as one set).
+    val extraParts: List<DraftSetPart> = emptyList()
+) {
+    val isMultiPart: Boolean get() = extraParts.isNotEmpty()
+}
 
 data class WorkoutSessionUiState(
     val dayTitle: String = "",
@@ -38,6 +52,7 @@ data class WorkoutSessionUiState(
     val previousBestForCurrentExercise: LoggedSetEntity? = null,
     val sessionId: Long = -1,
     val sessionStartedAtMillis: Long = 0,
+    val skippedWarmupExerciseIds: Set<Long> = emptySet(),
     val isLoaded: Boolean = false
 ) {
     val currentExercise: ExerciseEntity?
@@ -53,14 +68,16 @@ data class WorkoutSessionUiState(
     val isInWarmupSubstage: Boolean
         get() {
             val exercise = currentExercise ?: return false
+            if (exercise.exerciseId in skippedWarmupExerciseIds) return false
             return exercise.warmupSets > 0 && loggedWarmupSets.size < exercise.warmupSets
         }
 
     val isCurrentExerciseComplete: Boolean
         get() {
             val exercise = currentExercise ?: return false
-            return loggedWarmupSets.size >= exercise.warmupSets &&
-                loggedWorkingSets.size >= exercise.workingSets
+            val warmupSatisfied = exercise.exerciseId in skippedWarmupExerciseIds ||
+                loggedWarmupSets.size >= exercise.warmupSets
+            return warmupSatisfied && loggedWorkingSets.size >= exercise.workingSets
         }
 
     val isLastExercise: Boolean
@@ -78,6 +95,7 @@ class WorkoutSessionViewModel(
     private val _sessionId = MutableStateFlow(-1L)
     private val _sessionStartedAt = MutableStateFlow(0L)
     private val _previousBest = MutableStateFlow<LoggedSetEntity?>(null)
+    private val _skippedWarmupExerciseIds = MutableStateFlow<Set<Long>>(emptySet())
     private val _draft = MutableStateFlow(SetEntryDraft())
     val draft: StateFlow<SetEntryDraft> = _draft.asStateFlow()
 
@@ -104,7 +122,8 @@ class WorkoutSessionViewModel(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val uiState: StateFlow<WorkoutSessionUiState> = combine(
-        dayFlow, _stage, _currentExerciseIndex, _sessionId, _sessionStartedAt, _previousBest, loggedSetsForCurrentExercise
+        dayFlow, _stage, _currentExerciseIndex, _sessionId, _sessionStartedAt, _previousBest,
+        loggedSetsForCurrentExercise, _skippedWarmupExerciseIds
     ) { values ->
         val day = values[0] as DayWithExercises?
         val stage = values[1] as SessionStage
@@ -114,6 +133,8 @@ class WorkoutSessionViewModel(
         val previousBest = values[5] as LoggedSetEntity?
         @Suppress("UNCHECKED_CAST")
         val loggedSets = values[6] as List<LoggedSetEntity>
+        @Suppress("UNCHECKED_CAST")
+        val skippedWarmupIds = values[7] as Set<Long>
         val exercises = day?.exercises.orEmpty()
         WorkoutSessionUiState(
             dayTitle = day?.day?.title ?: "",
@@ -125,6 +146,7 @@ class WorkoutSessionViewModel(
             previousBestForCurrentExercise = previousBest,
             sessionId = sessionId,
             sessionStartedAtMillis = startedAt,
+            skippedWarmupExerciseIds = skippedWarmupIds,
             isLoaded = day != null
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkoutSessionUiState())
@@ -147,12 +169,16 @@ class WorkoutSessionViewModel(
             _sessionStartedAt.value = session?.startedAtEpochMillis ?: System.currentTimeMillis()
         }
         // Keep "previous best" in sync with whichever exercise is currently active.
+        // This is specifically the heaviest WORKING set from the last time this
+        // exercise was logged (not just whatever set was most recent, which could
+        // have been a lighter warmup or a lighter early working set) — so it's a
+        // meaningful target to beat for progressive overload.
         viewModelScope.launch {
-            combine(_sessionId, _currentExerciseIndex, dayFlow) { sessionId, index, day ->
-                Pair(sessionId, day?.exercises?.getOrNull(index)?.exerciseId)
-            }.collect { (sessionId, exerciseId) ->
-                _previousBest.value = if (sessionId > 0 && exerciseId != null) {
-                    repository.getMostRecentSetBeforeSession(exerciseId, sessionId)
+            combine(_currentExerciseIndex, dayFlow) { index, day ->
+                day?.exercises?.getOrNull(index)?.exerciseId
+            }.collect { exerciseId ->
+                _previousBest.value = if (exerciseId != null) {
+                    repository.getLastTopWorkingSet(exerciseId)
                 } else null
             }
         }
@@ -185,11 +211,39 @@ class WorkoutSessionViewModel(
         _draft.value = _draft.value.copy(note = value)
     }
 
+    /** Turns on multi-part (drop set) entry for the set currently being logged, adding one empty extra part. */
+    fun addDraftPart() {
+        _draft.value = _draft.value.copy(extraParts = _draft.value.extraParts + DraftSetPart())
+    }
+
+    fun removeDraftPart(index: Int) {
+        _draft.value = _draft.value.copy(
+            extraParts = _draft.value.extraParts.toMutableList().apply { if (index in indices) removeAt(index) }
+        )
+    }
+
+    fun updateDraftPartWeight(index: Int, value: String) {
+        val parts = _draft.value.extraParts.toMutableList()
+        if (index in parts.indices) {
+            parts[index] = parts[index].copy(weight = value)
+            _draft.value = _draft.value.copy(extraParts = parts)
+        }
+    }
+
+    fun updateDraftPartReps(index: Int, value: String) {
+        val parts = _draft.value.extraParts.toMutableList()
+        if (index in parts.indices) {
+            parts[index] = parts[index].copy(reps = value.filter { it.isDigit() })
+            _draft.value = _draft.value.copy(extraParts = parts)
+        }
+    }
+
     /**
      * Logs the current draft as the next set for the current exercise — into
      * the warmup stage while warmup sets are still outstanding, otherwise
      * into working sets — then auto-starts rest, unless this was the
-     * exercise's very last set overall.
+     * exercise's very last set overall. If the draft has extra parts (a
+     * drop set), they're all saved together as one logged set.
      */
     fun logCurrentSet() {
         val state = uiState.value
@@ -198,6 +252,16 @@ class WorkoutSessionViewModel(
         val reps = _draft.value.reps.toIntOrNull() ?: return
         val note = _draft.value.note
         val isWarmup = state.isInWarmupSubstage
+
+        // Only fully-filled-in extra parts count — an incomplete trailing
+        // part (e.g. weight typed but reps left blank) is dropped silently
+        // rather than blocking the whole set from being logged.
+        val validExtraParts = _draft.value.extraParts.mapNotNull { part ->
+            val w = part.weight.toDoubleOrNull()
+            val r = part.reps.toIntOrNull()
+            if (w != null && r != null) SetPart(w, r) else null
+        }
+        val extraPartsString = (listOf(SetPart(weight, reps)) + validExtraParts).toExtraPartsString()
 
         viewModelScope.launch {
             val stageSets = if (isWarmup) state.loggedWarmupSets else state.loggedWorkingSets
@@ -209,10 +273,11 @@ class WorkoutSessionViewModel(
                 setNumber = setNumber,
                 weight = weight,
                 reps = reps,
-                note = note
+                note = note,
+                extraParts = extraPartsString
             )
             // Keep the weight prefilled for the next set (common case: same weight across
-            // sets), but clear reps/note so they don't carry over by accident.
+            // sets), but clear reps/note/extra-parts so they don't carry over by accident.
             _draft.value = SetEntryDraft(weight = _draft.value.weight)
 
             // Auto-start rest timer, unless this was the exercise's final set overall.
@@ -229,6 +294,17 @@ class WorkoutSessionViewModel(
 
     fun deleteLoggedSet(loggedSet: LoggedSetEntity) {
         viewModelScope.launch { repository.deleteLoggedSet(loggedSet) }
+    }
+
+    /**
+     * Skips any remaining warmup sets for the current exercise and moves
+     * straight to working sets — for when the person doesn't need to warm
+     * up this particular exercise today. Doesn't log fake sets; just marks
+     * the warmup sub-stage as satisfied for this exercise in this session.
+     */
+    fun skipWarmupForCurrentExercise() {
+        val exercise = uiState.value.currentExercise ?: return
+        _skippedWarmupExerciseIds.value = _skippedWarmupExerciseIds.value + exercise.exerciseId
     }
 
     fun goToNextExercise() {

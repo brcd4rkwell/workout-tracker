@@ -199,7 +199,8 @@ object BackupManager {
                     weight = obj.getDouble("weight"),
                     reps = obj.getInt("reps"),
                     note = obj.optString("note", ""),
-                    loggedAtEpochMillis = obj.getLong("loggedAtEpochMillis")
+                    loggedAtEpochMillis = obj.getLong("loggedAtEpochMillis"),
+                    extraParts = obj.optString("extraParts", "")
                 )
             )
             importedCount++
@@ -273,6 +274,7 @@ object BackupManager {
         put("reps", reps)
         put("note", note)
         put("loggedAtEpochMillis", loggedAtEpochMillis)
+        put("extraParts", extraParts)
     }
 
     private fun WeightEntryEntity.toJson() = JSONObject().apply {

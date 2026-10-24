@@ -16,8 +16,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.DayEntity
 import com.d4rkwell.workouttracker.ui.components.ConfirmDialog
+import com.d4rkwell.workouttracker.ui.components.DragHandleGrip
 import com.d4rkwell.workouttracker.ui.components.EmptyState
 import com.d4rkwell.workouttracker.ui.components.TextFieldDialog
+import com.d4rkwell.workouttracker.ui.components.dragReorderOffset
+import com.d4rkwell.workouttracker.ui.components.rememberDragReorderState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,20 +93,33 @@ fun WeekDetailScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
+                var localDays by remember(days) { mutableStateOf(days) }
+                val rowHeight = 72.dp
+                val dragState = rememberDragReorderState(
+                    itemCount = localDays.size,
+                    itemHeight = rowHeight,
+                    onMove = { from, to ->
+                        localDays = localDays.toMutableList().apply { add(to, removeAt(from)) }
+                    },
+                    onDragEnd = {
+                        viewModel.reorderDays(localDays.map { it.dayId })
+                    }
+                )
+
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(days, key = { _, item -> item.dayId }) { index, day ->
+                    itemsIndexed(localDays, key = { _, item -> item.dayId }) { index, day ->
                         DayRow(
                             day = day,
                             onClick = { onOpenDay(day.dayId) },
                             onDeleteRequest = { dayPendingDelete = day },
                             onRenameRequest = { dayPendingRename = day },
-                            onMoveUp = { viewModel.moveDayUp(day.dayId) },
-                            onMoveDown = { viewModel.moveDayDown(day.dayId) },
-                            canMoveUp = index > 0,
-                            canMoveDown = index < days.size - 1
+                            modifier = Modifier
+                                .height(rowHeight)
+                                .dragReorderOffset(dragState, index),
+                            dragHandle = { DragHandleGrip(dragState, index) }
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -190,17 +206,15 @@ private fun DayRow(
     onClick: () -> Unit,
     onDeleteRequest: () -> Unit,
     onRenameRequest: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean
+    modifier: Modifier = Modifier,
+    dragHandle: @Composable () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -208,6 +222,8 @@ private fun DayRow(
                 .padding(start = 16.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            dragHandle()
+            Spacer(Modifier.width(10.dp))
             Icon(
                 Icons.Filled.FitnessCenter,
                 contentDescription = null,
@@ -223,30 +239,6 @@ private fun DayRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            Column {
-                IconButton(
-                    onClick = onMoveUp,
-                    enabled = canMoveUp,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowUp,
-                        contentDescription = "Move day up",
-                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
-                IconButton(
-                    onClick = onMoveDown,
-                    enabled = canMoveDown,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Move day down",
-                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
             }
             Box {
                 IconButton(onClick = { showMenu = true }) {

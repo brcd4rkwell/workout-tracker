@@ -20,6 +20,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.d4rkwell.workouttracker.data.local.entity.ExerciseEntity
 import com.d4rkwell.workouttracker.data.local.entity.LoggedSetEntity
+import com.d4rkwell.workouttracker.data.local.entity.allParts
+import com.d4rkwell.workouttracker.data.local.entity.totalReps
 import com.d4rkwell.workouttracker.timer.TimerUiState
 import com.d4rkwell.workouttracker.ui.components.CircularTimerDisplay
 import com.d4rkwell.workouttracker.util.formatRepRange
@@ -34,15 +36,22 @@ fun ExerciseStage(
     loggedWarmupSets: List<LoggedSetEntity>,
     loggedWorkingSets: List<LoggedSetEntity>,
     isInWarmupSubstage: Boolean,
+    isWarmupSkipped: Boolean,
     previousBest: LoggedSetEntity?,
     draftWeight: String,
     draftReps: String,
     draftNote: String,
+    draftExtraParts: List<DraftSetPart>,
     timerState: TimerUiState,
     onDraftWeightChange: (String) -> Unit,
     onDraftRepsChange: (String) -> Unit,
     onDraftNoteChange: (String) -> Unit,
+    onAddDraftPart: () -> Unit,
+    onRemoveDraftPart: (Int) -> Unit,
+    onDraftPartWeightChange: (Int, String) -> Unit,
+    onDraftPartRepsChange: (Int, String) -> Unit,
     onLogSet: () -> Unit,
+    onSkipWarmup: () -> Unit,
     onDeleteSet: (LoggedSetEntity) -> Unit,
     onSkipTimer: () -> Unit,
     onAddTimerSeconds: (Int) -> Unit,
@@ -111,12 +120,8 @@ fun ExerciseStage(
         }
 
         if (previousBest != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Last time: ${formatWeight(previousBest.weight)} × ${previousBest.reps}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.height(10.dp))
+            PreviousBestCard(previousBest)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -137,7 +142,7 @@ fun ExerciseStage(
             Spacer(Modifier.height(8.dp))
             if (loggedWarmupSets.isEmpty()) {
                 Text(
-                    "No warmup sets logged yet.",
+                    if (isWarmupSkipped) "Skipped for this session." else "No warmup sets logged yet.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -220,7 +225,42 @@ fun ExerciseStage(
                             )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    // Extra drop-set parts: each additional weight×reps pair done
+                    // right after the one above, as part of the same set (e.g.
+                    // 25kg×4 then immediately 20kg×6).
+                    draftExtraParts.forEachIndexed { partIndex, part ->
+                        Spacer(Modifier.height(10.dp))
+                        androidx.compose.runtime.key(exercise.exerciseId, isInWarmupSubstage, partIndex) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(
+                                    value = part.weight,
+                                    onValueChange = { onDraftPartWeightChange(partIndex, it) },
+                                    label = { Text("Drop ${partIndex + 2} weight") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = part.reps,
+                                    onValueChange = { onDraftPartRepsChange(partIndex, it) },
+                                    label = { Text("Reps") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { onRemoveDraftPart(partIndex) }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Remove this part")
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = onAddDraftPart) {
+                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (draftExtraParts.isEmpty()) "Add Drop (different weight, same set)" else "Add Another Drop")
+                    }
+                    Spacer(Modifier.height(4.dp))
                     com.d4rkwell.workouttracker.ui.components.ClearableTextField(
                         value = draftNote,
                         onValueChange = onDraftNoteChange,
@@ -237,7 +277,25 @@ fun ExerciseStage(
                     ) {
                         Icon(Icons.Filled.Check, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(if (isInWarmupSubstage) "Log Warmup Set" else "Log Set")
+                        Text(
+                            when {
+                                draftExtraParts.isNotEmpty() && isInWarmupSubstage -> "Log Warmup Drop Set"
+                                draftExtraParts.isNotEmpty() -> "Log Drop Set"
+                                isInWarmupSubstage -> "Log Warmup Set"
+                                else -> "Log Set"
+                            }
+                        )
+                    }
+                    if (isInWarmupSubstage) {
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onSkipWarmup,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Skip Warmup Sets")
+                        }
                     }
                 }
             }
@@ -334,7 +392,7 @@ private fun LoggedSetRow(set: LoggedSetEntity, onDelete: () -> Unit) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             Box(
                 modifier = Modifier
@@ -350,20 +408,38 @@ private fun LoggedSetRow(set: LoggedSetEntity, onDelete: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                "${formatWeight(set.weight)} × ${set.reps}",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            if (set.note.isNotBlank()) {
-                Text(
-                    set.note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                val parts = set.allParts()
+                if (parts.size <= 1) {
+                    Text(
+                        "${formatWeight(set.weight)} × ${set.reps}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    // Each weight×reps part of a drop set, stacked — with the
+                    // combined rep total shown underneath for a quick glance.
+                    parts.forEachIndexed { i, part ->
+                        Text(
+                            "${formatWeight(part.weight)} × ${part.reps}" + if (i == 0) " (drop set)" else "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        "Total: ${set.totalReps()} reps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (set.note.isNotBlank()) {
+                    Text(
+                        set.note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
@@ -371,6 +447,46 @@ private fun LoggedSetRow(set: LoggedSetEntity, onDelete: () -> Unit) {
                     contentDescription = "Remove set",
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A highlighted callout showing your heaviest working set from the last
+ * time you did this exercise — the target to beat for progressive
+ * overload, shown prominently right where you're deciding what weight
+ * and reps to log for today's working sets.
+ */
+@Composable
+private fun PreviousBestCard(previousBest: LoggedSetEntity) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.TrendingUp,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    "Last time's top set",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "${formatWeight(previousBest.weight)} × ${previousBest.reps}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
