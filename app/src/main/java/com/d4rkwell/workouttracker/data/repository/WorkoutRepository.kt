@@ -250,10 +250,20 @@ class WorkoutRepository(
      * used to show "Last used: 80kg x 8" on an exercise's plan card, so
      * when you start a new week you can see what weight to aim for before
      * you even begin a live workout.
+     *
+     * Matches by [exerciseName] rather than exerciseId, so this carries
+     * across every week that has an exercise with that name — e.g. the
+     * same "Bench Press" added separately to Week 1 and Week 2 shares one
+     * history, which is what a multi-week program with a repeating
+     * routine needs. [excludingSessionId], when >= 0, leaves out that one
+     * session (used during a live workout so "last time" never shows a
+     * set you just logged a moment ago in the current session).
      */
-    suspend fun getLastTopWorkingSet(exerciseId: Long): LoggedSetEntity? {
-        val sessionId = loggedSetDao.getMostRecentSessionIdForExercise(exerciseId) ?: return null
-        return loggedSetDao.getHeaviestWorkingSetInSession(exerciseId, sessionId)
+    suspend fun getLastTopWorkingSet(exerciseName: String, excludingSessionId: Long = -1): LoggedSetEntity? {
+        if (exerciseName.isBlank()) return null
+        val sessionId = loggedSetDao.getMostRecentSessionIdForExerciseName(exerciseName, excludingSessionId)
+            ?: return null
+        return loggedSetDao.getHeaviestWorkingSetInSessionByName(exerciseName, sessionId)
     }
 
     suspend fun logSet(

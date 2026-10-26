@@ -172,13 +172,16 @@ class WorkoutSessionViewModel(
         // This is specifically the heaviest WORKING set from the last time this
         // exercise was logged (not just whatever set was most recent, which could
         // have been a lighter warmup or a lighter early working set) — so it's a
-        // meaningful target to beat for progressive overload.
+        // meaningful target to beat for progressive overload. Matched by exercise
+        // NAME (not exerciseId) so this carries across every week that has an
+        // exercise with that name, and excludes the current session so it never
+        // shows a set just logged a moment ago in this same workout.
         viewModelScope.launch {
-            combine(_currentExerciseIndex, dayFlow) { index, day ->
-                day?.exercises?.getOrNull(index)?.exerciseId
-            }.collect { exerciseId ->
-                _previousBest.value = if (exerciseId != null) {
-                    repository.getLastTopWorkingSet(exerciseId)
+            combine(_currentExerciseIndex, dayFlow, _sessionId) { index, day, sessionId ->
+                Pair(day?.exercises?.getOrNull(index)?.name, sessionId)
+            }.collect { (exerciseName, sessionId) ->
+                _previousBest.value = if (!exerciseName.isNullOrBlank()) {
+                    repository.getLastTopWorkingSet(exerciseName, excludingSessionId = sessionId)
                 } else null
             }
         }

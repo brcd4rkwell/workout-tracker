@@ -23,7 +23,10 @@ class DayEditorViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Each exercise's heaviest working set from its last logged session, keyed by
-    // exerciseId — so the plan list can show "Last used: 80kg x 8" per exercise.
+    // exerciseId (so the plan list can look it up per row) but matched by
+    // exercise NAME under the hood — so e.g. "Bench Press" in Week 2 shows the
+    // result from "Bench Press" in Week 1, since they're the same movement
+    // repeated through the program rather than unrelated exercises.
     private val _lastTopSets = MutableStateFlow<Map<Long, LoggedSetEntity?>>(emptyMap())
     val lastTopSets: StateFlow<Map<Long, LoggedSetEntity?>> = _lastTopSets.asStateFlow()
 
@@ -32,7 +35,7 @@ class DayEditorViewModel(
             dayWithExercises.collect { day ->
                 val exercises = day?.exercises.orEmpty()
                 val results = exercises.associate { ex ->
-                    ex.exerciseId to repository.getLastTopWorkingSet(ex.exerciseId)
+                    ex.exerciseId to repository.getLastTopWorkingSet(ex.name)
                 }
                 _lastTopSets.value = results
             }
