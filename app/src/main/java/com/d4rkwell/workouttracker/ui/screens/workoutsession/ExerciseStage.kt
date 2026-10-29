@@ -50,7 +50,7 @@ fun ExerciseStage(
     onRemoveDraftPart: (Int) -> Unit,
     onDraftPartWeightChange: (Int, String) -> Unit,
     onDraftPartRepsChange: (Int, String) -> Unit,
-    onLogSet: () -> Unit,
+    onLogSet: (isWarmup: Boolean) -> Unit,
     onSkipWarmup: () -> Unit,
     onDeleteSet: (LoggedSetEntity) -> Unit,
     onSkipTimer: () -> Unit,
@@ -61,6 +61,21 @@ fun ExerciseStage(
     canGoPrev: Boolean,
     isLastExercise: Boolean
 ) {
+    // Which logging form to show: normally this just follows isInWarmupSubstage
+    // (warmup first, then working sets once warmup is done), but the person can
+    // manually switch back to logging an extra/corrected warmup set even after
+    // moving on to working sets — e.g. to fix a warmup weight they got wrong.
+    // Resets to the natural stage whenever the exercise itself changes.
+    var manualWarmupEntry by remember(exercise.exerciseId) { mutableStateOf<Boolean?>(null) }
+    val showWarmupForm = manualWarmupEntry ?: isInWarmupSubstage
+    // Once the person has actually finished all their working sets, logging
+    // "one more warmup set" stops making sense — fall back to the normal stage.
+    LaunchedEffect(isInWarmupSubstage, loggedWorkingSets.size, exercise.workingSets) {
+        if (!isInWarmupSubstage && loggedWorkingSets.size >= exercise.workingSets) {
+            manualWarmupEntry = null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -153,6 +168,17 @@ fun ExerciseStage(
                     }
                 }
             }
+            // Once past the warmup stage, offer a way back in to add or fix a
+            // warmup set — otherwise there'd be no way to log one after moving
+            // on to working sets.
+            if (!isInWarmupSubstage && !showWarmupForm) {
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = { manualWarmupEntry = true }) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Add or Edit a Warmup Set")
+                }
+            }
             Spacer(Modifier.height(16.dp))
         }
 
@@ -175,9 +201,13 @@ fun ExerciseStage(
 
         Spacer(Modifier.height(20.dp))
 
-        val targetForCurrentSubstage = if (isInWarmupSubstage) exercise.warmupSets else exercise.workingSets
-        val loggedForCurrentSubstage = if (isInWarmupSubstage) loggedWarmupSets.size else loggedWorkingSets.size
-        val setsRemaining = targetForCurrentSubstage - loggedForCurrentSubstage
+        // When manually logging an extra warmup set past the natural warmup
+        // stage, there's no fixed target count to count up to (the plan's
+        // warmup count was already met) — just always allow one more.
+        val manuallyAddingWarmup = showWarmupForm && !isInWarmupSubstage
+        val targetForCurrentSubstage = if (showWarmupForm) exercise.warmupSets else exercise.workingSets
+        val loggedForCurrentSubstage = if (showWarmupForm) loggedWarmupSets.size else loggedWorkingSets.size
+        val setsRemaining = if (manuallyAddingWarmup) 1 else targetForCurrentSubstage - loggedForCurrentSubstage
 
         if (setsRemaining > 0) {
             Surface(
@@ -185,21 +215,30 @@ fun ExerciseStage(
                 color = MaterialTheme.colorScheme.surface
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        if (isInWarmupSubstage)
-                            "Log warmup set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage"
-                        else
-                            "Log working set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            when {
+                                manuallyAddingWarmup -> "Log an extra warmup set"
+                                showWarmupForm -> "Log warmup set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage"
+                                else -> "Log working set ${loggedForCurrentSubstage + 1} of $targetForCurrentSubstage"
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (manuallyAddingWarmup) {
+                            TextButton(onClick = { manualWarmupEntry = false }) {
+                                Text("Done")
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(12.dp))
                     // Keying these fields by exercise id + warmup/working stage gives each
                     // one a distinct Compose identity, so the keyboard correctly switches
                     // to the numeric layout instead of getting stuck on whatever keyboard
                     // type a previously-focused text field (like the exercise name field)
                     // last used.
-                    androidx.compose.runtime.key(exercise.exerciseId, isInWarmupSubstage) {
+                    androidx.compose.runtime.key(exercise.exerciseId, showWarmupForm) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedTextField(
                                 value = draftWeight,
@@ -230,7 +269,7 @@ fun ExerciseStage(
                     // 25kg×4 then immediately 20kg×6).
                     draftExtraParts.forEachIndexed { partIndex, part ->
                         Spacer(Modifier.height(10.dp))
-                        androidx.compose.runtime.key(exercise.exerciseId, isInWarmupSubstage, partIndex) {
+                        androidx.compose.runtime.key(exercise.exerciseId, showWarmupForm, partIndex) {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedTextField(
                                     value = part.weight,
@@ -270,7 +309,7 @@ fun ExerciseStage(
                     )
                     Spacer(Modifier.height(14.dp))
                     Button(
-                        onClick = onLogSet,
+                        onClick = { onLogSet(showWarmupForm) },
                         enabled = draftWeight.toDoubleOrNull() != null && draftReps.toIntOrNull() != null,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(14.dp)
@@ -279,9 +318,9 @@ fun ExerciseStage(
                         Spacer(Modifier.width(8.dp))
                         Text(
                             when {
-                                draftExtraParts.isNotEmpty() && isInWarmupSubstage -> "Log Warmup Drop Set"
+                                draftExtraParts.isNotEmpty() && showWarmupForm -> "Log Warmup Drop Set"
                                 draftExtraParts.isNotEmpty() -> "Log Drop Set"
-                                isInWarmupSubstage -> "Log Warmup Set"
+                                showWarmupForm -> "Log Warmup Set"
                                 else -> "Log Set"
                             }
                         )

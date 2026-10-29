@@ -242,19 +242,21 @@ class WorkoutSessionViewModel(
     }
 
     /**
-     * Logs the current draft as the next set for the current exercise — into
-     * the warmup stage while warmup sets are still outstanding, otherwise
-     * into working sets — then auto-starts rest, unless this was the
-     * exercise's very last set overall. If the draft has extra parts (a
-     * drop set), they're all saved together as one logged set.
+     * Logs the current draft as the next set for the current exercise.
+     * [isWarmup] comes from the UI (which form — warmup or working — is
+     * currently showing), rather than being inferred here, so the person
+     * can manually log an extra or corrected warmup set even after moving
+     * on to working sets, not just during the natural warmup stage. Then
+     * auto-starts rest, unless this was the exercise's very last set
+     * overall. If the draft has extra parts (a drop set), they're all
+     * saved together as one logged set.
      */
-    fun logCurrentSet() {
+    fun logCurrentSet(isWarmup: Boolean) {
         val state = uiState.value
         val exercise = state.currentExercise ?: return
         val weight = _draft.value.weight.toDoubleOrNull() ?: return
         val reps = _draft.value.reps.toIntOrNull() ?: return
         val note = _draft.value.note
-        val isWarmup = state.isInWarmupSubstage
 
         // Only fully-filled-in extra parts count — an incomplete trailing
         // part (e.g. weight typed but reps left blank) is dropped silently
